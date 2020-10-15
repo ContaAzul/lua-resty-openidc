@@ -911,8 +911,10 @@ local function openidc_load_jwt_and_verify_crypto(opts, jwt_string, asymmetric_s
 symmetric_secret, expected_algs, ...)
   log(DEBUG,"CRYPTO ZAMBAS")
   local r_jwt = require("resty.jwt")
+  log(DEBUG, "REQUIRED!")
   local enc_hdr, enc_payload, enc_sign = string.match(jwt_string, '^(.+)%.(.+)%.(.*)$')
   if enc_payload and (not enc_sign or enc_sign == "") then
+    log(DEBUG,"NONE ALG")
     local jwt = openidc_load_jwt_none_alg(enc_hdr, enc_payload)
     if jwt then
       if opts.accept_none_alg then
@@ -923,7 +925,7 @@ symmetric_secret, expected_algs, ...)
       end
     end -- otherwise the JWT is invalid and load_jwt produces an error
   end
-
+  log(DEBUG,"WILL LOAD")
   local jwt_obj = r_jwt:load_jwt(jwt_string, nil)
   if not jwt_obj.valid then
     local reason = "invalid jwt"
