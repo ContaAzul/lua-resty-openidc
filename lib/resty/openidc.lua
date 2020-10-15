@@ -291,14 +291,8 @@ local function openidc_base64_url_decode(input)
     local padlen = 4 - reminder
     input = input .. string.rep('=', padlen)
   end
-  input = input:gsub('%-', '+'):gsub('_', '/')
+  input = input:gsub('-', '+'):gsub('_', '/')
   return unb64(input)
-end
-
--- perform base64url encoding
-local function openidc_base64_url_encode(input)
-  local output = b64(input, true)
-  return output:gsub('%+', '-'):gsub('/', '_')
 end
 
 local function openidc_combine_uri(uri, params)
@@ -316,12 +310,6 @@ local function decorate_request(http_request_decorator, req)
   return http_request_decorator and http_request_decorator(req) or req
 end
 
-local function openidc_s256(verifier)
-  local sha256 = (require 'resty.sha256'):new()
-  sha256:update(verifier)
-  return openidc_base64_url_encode(sha256:final())
-end
-
 -- send the browser of to the OP's authorization endpoint
 local function openidc_authorize(opts, session, target_url, prompt)
   local resty_random = require("resty.random")
@@ -331,7 +319,6 @@ local function openidc_authorize(opts, session, target_url, prompt)
   local state = resty_string.to_hex(resty_random.bytes(16))
   local nonce = (opts.use_nonce == nil or opts.use_nonce)
     and resty_string.to_hex(resty_random.bytes(16))
-  local code_verifier = opts.use_pkce and openidc_base64_url_encode(resty_random.bytes(32))
 
   -- assemble the parameters to the authentication request
   local params = {
@@ -354,11 +341,6 @@ local function openidc_authorize(opts, session, target_url, prompt)
     params.display = opts.display
   end
 
-  if code_verifier then
-    params.code_challenge_method = 'S256'
-    params.code_challenge = openidc_s256(code_verifier)
-  end
-
   -- merge any provided extra parameters
   if opts.authorization_params then
     for k, v in pairs(opts.authorization_params) do params[k] = v end
@@ -368,7 +350,6 @@ local function openidc_authorize(opts, session, target_url, prompt)
   session.data.original_url = target_url
   session.data.state = state
   session.data.nonce = nonce
-  session.data.code_verifier = code_verifier
   session.data.last_authenticated = ngx.time()
 
   if opts.lifecycle and opts.lifecycle.on_created then
@@ -514,8 +495,7 @@ function openidc.call_token_endpoint(opts, endpoint, body, auth, endpoint_name, 
     method = "POST",
     body = ngx.encode_args(body),
     headers = headers,
-    ssl_verify = (opts.ssl_verify ~= "no"),
-    keepalive = (opts.keepalive ~= "no")
+    ssl_verify = (opts.ssl_verify ~= "no")
   }))
   if not res then
     err = "accessing " .. ep_name .. " endpoint (" .. endpoint .. ") failed: " .. err
@@ -526,6 +506,38 @@ function openidc.call_token_endpoint(opts, endpoint, body, auth, endpoint_name, 
   log(DEBUG, ep_name .. " endpoint response: ", res.body)
 
   return openidc_parse_json_response(res, ignore_body_on_success)
+end
+
+-- make a call to the userinfo endpoint
+function openidc.call_userinfo_endpoint(opts, access_token)
+  if not opts.discovery.userinfo_endpoint then
+    log(DEBUG, "no userinfo endpoint supplied")
+    return nil, nil
+  end
+
+  local headers = {
+    ["Authorization"] = "Bearer " .. access_token,
+  }
+
+  log(DEBUG, "authorization header '" .. headers.Authorization .. "'")
+
+  local httpc = http.new()
+  openidc_configure_timeouts(httpc, opts.timeout)
+  openidc_configure_proxy(httpc, opts.proxy_opts)
+  local res, err = httpc:request_uri(opts.discovery.userinfo_endpoint,
+                                     decorate_request(opts.http_request_decorator, {
+    headers = headers,
+    ssl_verify = (opts.ssl_verify ~= "no")
+  }))
+  if not res then
+    err = "accessing (" .. opts.discovery.userinfo_endpoint .. ") failed: " .. err
+    return nil, err
+  end
+
+  log(DEBUG, "userinfo response: ", res.body)
+
+  -- parse the response from the user info endpoint
+  return openidc_parse_json_response(res)
 end
 
 -- computes access_token expires_in value (in seconds)
@@ -549,7 +561,7 @@ local function openidc_load_jwt_none_alg(enc_hdr, enc_payload)
 end
 
 -- get the Discovery metadata from the specified URL
-local function openidc_discover(url, ssl_verify, keepalive, timeout, exptime, proxy_opts, http_request_decorator)
+local function openidc_discover(url, ssl_verify, timeout, exptime, proxy_opts, http_request_decorator)
   log(DEBUG, "openidc_discover: URL is: " .. url)
 
   local json, err
@@ -562,8 +574,7 @@ local function openidc_discover(url, ssl_verify, keepalive, timeout, exptime, pr
     openidc_configure_timeouts(httpc, timeout)
     openidc_configure_proxy(httpc, proxy_opts)
     local res, error = httpc:request_uri(url, decorate_request(http_request_decorator, {
-      ssl_verify = (ssl_verify ~= "no"),
-      keepalive = (keepalive ~= "no")
+      ssl_verify = (ssl_verify ~= "no")
     }))
     if not res then
       err = "accessing discovery url (" .. url .. ") failed: " .. error
@@ -591,50 +602,13 @@ local function openidc_ensure_discovered_data(opts)
   local err
   if type(opts.discovery) == "string" then
     local discovery
-    discovery, err = openidc_discover(opts.discovery, opts.ssl_verify, opts.keepalive, opts.timeout, opts.jwk_expires_in, opts.proxy_opts,
+    discovery, err = openidc_discover(opts.discovery, opts.ssl_verify, opts.timeout, opts.jwk_expires_in, opts.proxy_opts,
                                       opts.http_request_decorator)
     if not err then
       opts.discovery = discovery
     end
   end
   return err
-end
-
--- make a call to the userinfo endpoint
-function openidc.call_userinfo_endpoint(opts, access_token)
-  local err = openidc_ensure_discovered_data(opts)
-  if err then
-    return nil, err
-  end
-  if not (opts and opts.discovery and opts.discovery.userinfo_endpoint) then
-    log(DEBUG, "no userinfo endpoint supplied")
-    return nil, nil
-  end
-
-  local headers = {
-    ["Authorization"] = "Bearer " .. access_token,
-  }
-
-  log(DEBUG, "authorization header '" .. headers.Authorization .. "'")
-
-  local httpc = http.new()
-  openidc_configure_timeouts(httpc, opts.timeout)
-  openidc_configure_proxy(httpc, opts.proxy_opts)
-  local res, err = httpc:request_uri(opts.discovery.userinfo_endpoint,
-                                     decorate_request(opts.http_request_decorator, {
-    headers = headers,
-    ssl_verify = (opts.ssl_verify ~= "no"),
-    keepalive = (opts.keepalive ~= "no")
-  }))
-  if not res then
-    err = "accessing (" .. opts.discovery.userinfo_endpoint .. ") failed: " .. err
-    return nil, err
-  end
-
-  log(DEBUG, "userinfo response: ", res.body)
-
-  -- parse the response from the user info endpoint
-  return openidc_parse_json_response(res)
 end
 
 local function can_use_token_auth_method(method, opts)
@@ -712,7 +686,7 @@ function openidc.get_discovery_doc(opts)
   return opts.discovery, err
 end
 
-local function openidc_jwks(url, force, ssl_verify, keepalive, timeout, exptime, proxy_opts, http_request_decorator)
+local function openidc_jwks(url, force, ssl_verify, timeout, exptime, proxy_opts, http_request_decorator)
   log(DEBUG, "openidc_jwks: URL is: " .. url .. " (force=" .. force .. ") (decorator=" .. (http_request_decorator and type(http_request_decorator) or "nil"))
 
   local json, err, v
@@ -729,8 +703,7 @@ local function openidc_jwks(url, force, ssl_verify, keepalive, timeout, exptime,
     openidc_configure_timeouts(httpc, timeout)
     openidc_configure_proxy(httpc, proxy_opts)
     local res, error = httpc:request_uri(url, decorate_request(http_request_decorator, {
-      ssl_verify = (ssl_verify ~= "no"),
-      keepalive = (keepalive ~= "no")
+      ssl_verify = (ssl_verify ~= "no")
     }))
     if not res then
       err = "accessing jwks url (" .. url .. ") failed: " .. error
@@ -888,7 +861,7 @@ local function openidc_pem_from_jwk(opts, kid)
   local jwk, jwks
 
   for force = 0, 1 do
-    jwks, err = openidc_jwks(opts.discovery.jwks_uri, force, opts.ssl_verify, opts.keepalive, opts.timeout, opts.jwk_expires_in, opts.proxy_opts,
+    jwks, err = openidc_jwks(opts.discovery.jwks_uri, force, opts.ssl_verify, opts.timeout, opts.jwk_expires_in, opts.proxy_opts,
                              opts.http_request_decorator)
     if err then
       return nil, err
@@ -951,7 +924,7 @@ end
 -- parse a JWT and verify its signature (if present)
 local function openidc_load_jwt_and_verify_crypto(opts, jwt_string, asymmetric_secret,
 symmetric_secret, expected_algs, ...)
-  log(DEBUG, "verify crypto")
+  log(DEBUG, "verify crypto 1.7.2")
   local r_jwt = require("resty.jwt")
   local enc_hdr, enc_payload, enc_sign = string.match(jwt_string, '^(.+)%.(.+)%.(.*)$')
   if enc_payload and (not enc_sign or enc_sign == "") then
@@ -1016,7 +989,6 @@ symmetric_secret, expected_algs, ...)
 
   jwt_obj = r_jwt:verify_jwt_obj(secret, jwt_obj, ...)
   if jwt_obj then
-    log(DEBUG, "Will print encoded jwt")
     log(DEBUG, "jwt: ", cjson.encode(jwt_obj), " ,valid: ", jwt_obj.valid, ", verified: ", jwt_obj.verified)
   end
   if not jwt_obj.verified then
@@ -1076,7 +1048,7 @@ end
 -- handle a "code" authorization response from the OP
 local function openidc_authorization_response(opts, session)
   local args = ngx.req.get_uri_args()
-  local err, log_err, client_err
+  local err
 
   if not args.code or not args.state then
     err = "unhandled request to the redirect_uri: " .. ngx.var.request_uri
@@ -1086,10 +1058,9 @@ local function openidc_authorization_response(opts, session)
 
   -- check that the state returned in the response against the session; prevents CSRF
   if args.state ~= session.data.state then
-    log_err = "state from argument: " .. (args.state and args.state or "nil") .. " does not match state restored from session: " .. (session.data.state and session.data.state or "nil")
-    client_err = "state from argument does not match state restored from session"
-    log(ERROR, log_err)
-    return nil, client_err, session.data.original_url, session
+    err = "state from argument: " .. (args.state and args.state or "nil") .. " does not match state restored from session: " .. (session.data.state and session.data.state or "nil")
+    log(ERROR, err)
+    return nil, err, session.data.original_url, session
   end
 
   err = ensure_config(opts)
@@ -1099,18 +1070,16 @@ local function openidc_authorization_response(opts, session)
 
   -- check the iss if returned from the OP
   if args.iss and args.iss ~= opts.discovery.issuer then
-    log_err = "iss from argument: " .. args.iss .. " does not match expected issuer: " .. opts.discovery.issuer
-    client_err = "iss from argument does not match expected issuer"
-    log(ERROR, log_err)
-    return nil, client_err, session.data.original_url, session
+    err = "iss from argument: " .. args.iss .. " does not match expected issuer: " .. opts.discovery.issuer
+    log(ERROR, err)
+    return nil, err, session.data.original_url, session
   end
 
   -- check the client_id if returned from the OP
   if args.client_id and args.client_id ~= opts.client_id then
-    log_err = "client_id from argument: " .. args.client_id .. " does not match expected client_id: " .. opts.client_id
-    client_err = "client_id from argument does not match expected client_id"
-    log(ERROR, log_err)
-    return nil, client_err, session.data.original_url, session
+    err = "client_id from argument: " .. args.client_id .. " does not match expected client_id: " .. opts.client_id
+    log(ERROR, err)
+    return nil, err, session.data.original_url, session
   end
 
   -- assemble the parameters to the token endpoint
@@ -1118,8 +1087,7 @@ local function openidc_authorization_response(opts, session)
     grant_type = "authorization_code",
     code = args.code,
     redirect_uri = openidc_get_redirect_uri(opts),
-    state = session.data.state,
-    code_verifier = session.data.code_verifier
+    state = session.data.state
   }
 
   log(DEBUG, "Authentication with OP done -> Calling OP Token Endpoint to obtain tokens")
@@ -1139,10 +1107,9 @@ local function openidc_authorization_response(opts, session)
 
   -- mark this sessions as authenticated
   session.data.authenticated = true
-  -- clear state, nonce and code_verifier to protect against potential misuse
+  -- clear state and nonce to protect against potential misuse
   session.data.nonce = nil
   session.data.state = nil
-  session.data.code_verifier = nil
   if store_in_session(opts, 'id_token') then
     session.data.id_token = id_token
   end
@@ -1404,7 +1371,7 @@ function openidc.authenticate(opts, target_url, unauth_action, session_opts)
 
   -- see if this is a request to the redirect_uri i.e. an authorization response
   local path = openidc_get_path(target_url)
-  if path == openidc_get_redirect_uri_path(opts) and string.find(target_url,"state=") then
+  if path == openidc_get_redirect_uri_path(opts) then
     log(DEBUG, "Redirect URI path (" .. path .. ") is currently navigated -> Processing authorization response coming from OP")
 
     if not session.present then
@@ -1461,14 +1428,18 @@ function openidc.authenticate(opts, target_url, unauth_action, session_opts)
       or opts.force_reauthorize
       or (try_to_renew and token_expired) then
     if unauth_action == "pass" then
-      if token_expired then
-        session.data.authenticated = false
-        return nil, 'token refresh failed', target_url, session
-      end
-      return nil, err, target_url, session
+      return
+      nil,
+      err,
+      target_url,
+      session
     end
     if unauth_action == 'deny' then
-      return nil, 'unauthorized request', target_url, session
+      return
+      nil,
+      'unauthorized request',
+      target_url,
+      session
     end
 
     err = ensure_config(opts)
