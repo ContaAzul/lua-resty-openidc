@@ -363,6 +363,12 @@ local function openidc_authorize(opts, session, target_url, prompt)
     for k, v in pairs(opts.authorization_params) do params[k] = v end
   end
 
+  if session.data.original_url != nil then
+    log(DEBUG, "session.data.original_url before: ")
+  end
+    
+  log(DEBUG, "target_url : " .. target_url)
+    
   -- store state in the session
   session.data.original_url = target_url
   session.data.state = state
