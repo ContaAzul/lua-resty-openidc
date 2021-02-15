@@ -383,12 +383,14 @@ local function openidc_authorize(opts, session, target_url, prompt)
   session:save()
 
   opts.custom_authorization_host = 'https://authentication-front.dev.contaazul.local/index.html'
+  opts.custom_authorization_next_origin_param = 'next_origin'
   -- redirect to the /authorization endpoint
   ngx.header["Cache-Control"] = "no-cache, no-store, max-age=0"
   if opts.custom_authorization_host == nil or opts.custom_authorization_endpoint == '' then
     return ngx.redirect(openidc_combine_uri(opts.discovery.authorization_endpoint, params))
   else
-    return ngx.redirect(opts.custom_authorization_host)
+    local next_origin = ngx.var.scheme .. ngx.var.host .. target_url
+    return ngx.redirect(opts.custom_authorization_host .. '?' .. opts.custom_authorization_next_origin_param .. '=' .. next_origin)
   end
 end
 
