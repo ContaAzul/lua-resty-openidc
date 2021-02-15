@@ -1480,6 +1480,19 @@ function openidc.authenticate(opts, target_url, unauth_action, session_opts)
     end
   end
 
+  local cookie = ngx.req.get_headers()['Cookie']
+  if cookie ~= nil then
+    log(DEBUG,'Cookies:' .. cookie)
+    local found_session = string.find(cookie, 'session' .. "=",1,true)  
+    if found_session ~= nil then
+      log(DEBUG, "Session cookie found :" .. found_session)
+    else  
+      log(DEBUG, "Cookies found, but no session on them")
+    end
+  else
+    log(DEBUG,'no cookie on request')
+  end
+  
   log(DEBUG,
     "session.present=", session.present,
     ", session.data.id_token=", session.data.id_token ~= nil,
