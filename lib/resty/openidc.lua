@@ -381,7 +381,7 @@ local function openidc_authorize(opts, session, target_url, prompt)
 
   session:save()
 
-  opts.custom_authorization_host = 'https://authentication-front.dev.contaazul.local/index.html'
+  opts.custom_authorization_host = 'https://authentication-front.dev.contaazul.local/index.html#/'
   opts.custom_authorization_next_origin_param = 'next_origin'
   -- redirect to the /authorization endpoint
   ngx.header["Cache-Control"] = "no-cache, no-store, max-age=0"
