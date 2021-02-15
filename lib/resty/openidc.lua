@@ -392,7 +392,9 @@ local function openidc_authorize(opts, session, target_url, prompt)
     local scheme = opts.redirect_uri_scheme or get_scheme(headers)
     local host = get_host_name(headers)
     local next_origin = scheme .. "://" .. host .. target_url
-    return ngx.redirect(opts.custom_authorization_host .. '?' .. opts.custom_authorization_next_origin_param .. '=' .. next_origin)
+    local custom_params = {}
+    custom_params[opts.custom_authorization_next_origin_param] = next_origin
+    return ngx.redirect(opts.custom_authorization_host .. '?' .. ngx.encode_args(custom_params))
   end
 end
 
