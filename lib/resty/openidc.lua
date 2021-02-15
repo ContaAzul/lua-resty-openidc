@@ -389,7 +389,7 @@ local function openidc_authorize(opts, session, target_url, prompt)
   if opts.custom_authorization_host == nil or opts.custom_authorization_endpoint == '' then
     return ngx.redirect(openidc_combine_uri(opts.discovery.authorization_endpoint, params))
   else
-    local next_origin = ngx.var.scheme .. ngx.var.host .. target_url
+    local next_origin = ngx.var.scheme .. "://" .. ngx.var.host .. target_url
     return ngx.redirect(opts.custom_authorization_host .. '?' .. opts.custom_authorization_next_origin_param .. '=' .. next_origin)
   end
 end
