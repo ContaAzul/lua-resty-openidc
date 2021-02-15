@@ -383,7 +383,7 @@ local function openidc_authorize(opts, session, target_url, prompt)
     return ngx.redirect(openidc_combine_uri(opts.discovery.authorization_endpoint, params))
   else
     return ngx.redirect(opts.custom_authorization_host)
-
+  end
 end
 
 -- parse the JSON result from a call to the OP
