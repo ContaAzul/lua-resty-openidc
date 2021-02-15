@@ -368,7 +368,7 @@ local function openidc_authorize(opts, session, target_url, prompt)
   end
     
   log(DEBUG, "target_url : " .. target_url)
-    
+  log(DEBUG, "host:" .. ngx.var.host)  
   -- store state in the session
   session.data.original_url = target_url
   session.data.state = state
