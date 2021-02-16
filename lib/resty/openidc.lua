@@ -323,72 +323,13 @@ end
 
 -- send the browser of to the OP's authorization endpoint
 local function openidc_authorize(opts, session, target_url, prompt)
-  local resty_random = require("resty.random")
-  local resty_string = require("resty.string")
-
-  -- generate state and nonce
-  local state = resty_string.to_hex(resty_random.bytes(16))
-  local nonce = (opts.use_nonce == nil or opts.use_nonce)
-    and resty_string.to_hex(resty_random.bytes(16))
-  local code_verifier = opts.use_pkce and openidc_base64_url_encode(resty_random.bytes(32))
-
-  -- assemble the parameters to the authentication request
-  local params = {
-    client_id = opts.client_id,
-    response_type = "code",
-    scope = opts.scope and opts.scope or "openid email profile",
-    redirect_uri = openidc_get_redirect_uri(opts),
-    state = state,
-  }
-
-  if nonce then
-    params.nonce = nonce
-  end
-
-  if prompt then
-    params.prompt = prompt
-  end
-
-  if opts.display then
-    params.display = opts.display
-  end
-
-  if code_verifier then
-    params.code_challenge_method = 'S256'
-    params.code_challenge = openidc_s256(code_verifier)
-  end
-
-  -- merge any provided extra parameters
-  if opts.authorization_params then
-    for k, v in pairs(opts.authorization_params) do params[k] = v end
-  end
-
   if session.data.original_url ~= nil then
     log(DEBUG, "session.data.original_url before: ")
   end
-    
   log(DEBUG, "target_url : " .. target_url)
-  -- store state in the session
-  session.data.original_url = target_url
-  session.data.state = state
-  session.data.nonce = nonce
-  session.data.code_verifier = code_verifier
-  session.data.last_authenticated = ngx.time()
-
-  if opts.lifecycle and opts.lifecycle.on_created then
-    opts.lifecycle.on_created(session)
-  end
-
-  session:save()
-
   opts.custom_authorization_host = 'https://authentication-front.dev.contaazul.local/index.html#/'
   opts.custom_authorization_next_origin_param = 'next_origin'
-  -- redirect to the /authorization endpoint
-  ngx.header["Cache-Control"] = "no-cache, no-store, max-age=0"
-  if opts.custom_authorization_host == nil or opts.custom_authorization_endpoint == '' then
-    log(DEBUG,"redirect to oidc flow")
-    return ngx.redirect(openidc_combine_uri(opts.discovery.authorization_endpoint, params))
-  else
+  if opts.custom_authorization_host ~= nil and opts.custom_authorization_endpoint ~= '' then
     log(DEBUG,"custom auth host flow.. redirect to configured URL")
     local headers = ngx.req.get_headers()
     local scheme = opts.redirect_uri_scheme or get_scheme(headers)
@@ -397,7 +338,66 @@ local function openidc_authorize(opts, session, target_url, prompt)
     local custom_params = {}
     custom_params[opts.custom_authorization_next_origin_param] = next_origin
     return ngx.redirect(opts.custom_authorization_host .. '?' .. ngx.encode_args(custom_params))
+  else
+    local resty_random = require("resty.random")
+    local resty_string = require("resty.string")
+  
+    -- generate state and nonce
+    local state = resty_string.to_hex(resty_random.bytes(16))
+    local nonce = (opts.use_nonce == nil or opts.use_nonce)
+      and resty_string.to_hex(resty_random.bytes(16))
+    local code_verifier = opts.use_pkce and openidc_base64_url_encode(resty_random.bytes(32))
+  
+    -- assemble the parameters to the authentication request
+    local params = {
+      client_id = opts.client_id,
+      response_type = "code",
+      scope = opts.scope and opts.scope or "openid email profile",
+      redirect_uri = openidc_get_redirect_uri(opts),
+      state = state,
+    }
+  
+    if nonce then
+      params.nonce = nonce
+    end
+  
+    if prompt then
+      params.prompt = prompt
+    end
+  
+    if opts.display then
+      params.display = opts.display
+    end
+  
+    if code_verifier then
+      params.code_challenge_method = 'S256'
+      params.code_challenge = openidc_s256(code_verifier)
+    end
+  
+    -- merge any provided extra parameters
+    if opts.authorization_params then
+      for k, v in pairs(opts.authorization_params) do params[k] = v end
+    end
+  
+    -- store state in the session
+    session.data.original_url = target_url
+    session.data.state = state
+    session.data.nonce = nonce
+    session.data.code_verifier = code_verifier
+    session.data.last_authenticated = ngx.time()
+  
+    if opts.lifecycle and opts.lifecycle.on_created then
+      opts.lifecycle.on_created(session)
+    end
+  
+    session:save()
+  
+    -- redirect to the /authorization endpoint
+    ngx.header["Cache-Control"] = "no-cache, no-store, max-age=0"
+    log(DEBUG,"redirect to oidc flow")
+    return ngx.redirect(openidc_combine_uri(opts.discovery.authorization_endpoint, params))  
   end
+
 end
 
 -- parse the JSON result from a call to the OP
