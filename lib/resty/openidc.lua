@@ -386,8 +386,10 @@ local function openidc_authorize(opts, session, target_url, prompt)
   -- redirect to the /authorization endpoint
   ngx.header["Cache-Control"] = "no-cache, no-store, max-age=0"
   if opts.custom_authorization_host == nil or opts.custom_authorization_endpoint == '' then
+    log(DEBUG,"redirect to oidc flow")
     return ngx.redirect(openidc_combine_uri(opts.discovery.authorization_endpoint, params))
   else
+    log(DEBUG,"custom auth host flow.. redirect to configured URL")
     local headers = ngx.req.get_headers()
     local scheme = opts.redirect_uri_scheme or get_scheme(headers)
     local host = get_host_name(headers)
