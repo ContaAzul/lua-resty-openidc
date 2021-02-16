@@ -338,7 +338,7 @@ local function openidc_authorize(opts, session, target_url, prompt)
     local custom_params = {}
     custom_params[opts.custom_authorization_next_origin_param] = next_origin
     local auth_url = opts.custom_authorization_host .. '?' .. ngx.encode_args(custom_params)
-    log(DEBUG,"authentication on : " + auth_url)
+    log(DEBUG,"authentication on : " .. auth_url)
     ngx.redirect(auth_url)
     return nil
   else
