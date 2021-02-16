@@ -337,7 +337,10 @@ local function openidc_authorize(opts, session, target_url, prompt)
     local next_origin = scheme .. "://" .. host .. target_url
     local custom_params = {}
     custom_params[opts.custom_authorization_next_origin_param] = next_origin
-    return ngx.redirect(opts.custom_authorization_host .. '?' .. ngx.encode_args(custom_params))
+    local auth_url = opts.custom_authorization_host .. '?' .. ngx.encode_args(custom_params)
+    log(DEBUG,"authentication on : " + auth_url)
+    ngx.redirect(auth_url)
+    return nil
   else
     local resty_random = require("resty.random")
     local resty_string = require("resty.string")
