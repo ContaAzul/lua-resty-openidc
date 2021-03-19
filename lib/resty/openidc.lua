@@ -1160,7 +1160,7 @@ function openidc.save_as_authenticated(opts,session,json)
   end
 
   
-  if oidcConfig.inject_user and oidcConfig.inject_user == "yes" and store_in_session(opts, 'user') then
+  if opts.inject_user and opts.inject_user == "yes" and store_in_session(opts, 'user') then
     -- call the user info endpoint
     -- TODO: should this error be checked?
     local user
