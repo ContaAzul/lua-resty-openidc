@@ -1202,8 +1202,8 @@ function openidc.save_as_authenticated(opts,session,json)
     session.data.original_url = openidc_get_redirect_uri(opts)
   end
   -- redirect to the URL that was accessed originally
-  log(DEBUG, "OIDC Authorization Code Flow completed -> Redirecting to original URL (" .. session.data.original_url .. ")")
-  ngx.redirect(session.data.original_url)
+  --log(DEBUG, "OIDC Authorization Code Flow completed -> Redirecting to original URL (" .. session.data.original_url .. ")")
+  --ngx.redirect(session.data.original_url)
   return nil, nil, session.data.original_url, session
 end
 
