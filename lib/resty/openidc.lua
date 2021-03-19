@@ -1127,10 +1127,10 @@ local function openidc_authorization_response(opts, session)
   if err then
     return nil, err, session.data.original_url, session
   end
-  return openidc.save_as_authenticated(opts,session,json)
+  return openidc.save_as_authenticated(opts,session,json,true)
 end
 
-function openidc.save_as_authenticated(opts,session,json)
+function openidc.save_as_authenticated(opts,session,json,do_redirect)
   if opts.scope then
     log(DEBUG, "Scope: " .. opts.scope)
   end
@@ -1201,9 +1201,11 @@ function openidc.save_as_authenticated(opts,session,json)
   if not session.data.original_url then
     session.data.original_url = openidc_get_redirect_uri(opts)
   end
-  -- redirect to the URL that was accessed originally
-  --log(DEBUG, "OIDC Authorization Code Flow completed -> Redirecting to original URL (" .. session.data.original_url .. ")")
-  --ngx.redirect(session.data.original_url)
+  if do_redirect then  
+    -- redirect to the URL that was accessed originally
+    log(DEBUG, "OIDC Authorization Code Flow completed -> Redirecting to original URL (" .. session.data.original_url .. ")")
+    ngx.redirect(session.data.original_url)
+  end
   return nil, nil, session.data.original_url, session
 end
 
