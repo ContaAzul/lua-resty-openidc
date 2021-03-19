@@ -1131,6 +1131,10 @@ local function openidc_authorization_response(opts, session)
 end
 
 function openidc.save_as_authenticated(opts,session,json)
+  if opts.scope then
+    log(DEBUG, "Scope: " .. opts.scope)
+  end
+
   local current_time = ngx.time()
   if session == nil then
     session, session_error = r_session.start(session_opts)
@@ -1155,7 +1159,8 @@ function openidc.save_as_authenticated(opts,session,json)
     session.data.id_token = id_token
   end
 
-  if store_in_session(opts, 'user') then
+  
+  if oidcConfig.inject_user and oidcConfig.inject_user == "yes" and store_in_session(opts, 'user') then
     -- call the user info endpoint
     -- TODO: should this error be checked?
     local user
