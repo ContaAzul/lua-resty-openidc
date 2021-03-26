@@ -1418,7 +1418,7 @@ function openidc.authenticate(opts, target_url, unauth_action, session_opts)
   end
   log(DEBUG, "Session started!")
   if session_error ~= nil then
-    log(DEBUG, "Session errors ??? : " .. session_error)
+    log(DEBUG, "Session errors found!!!")
   end
   
   "session.present=", session.present,
