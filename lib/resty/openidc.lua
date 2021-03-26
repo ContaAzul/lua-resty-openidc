@@ -1421,10 +1421,12 @@ function openidc.authenticate(opts, target_url, unauth_action, session_opts)
     log(DEBUG, "Session errors found!!!")
   end
   
-  "session.present=", session.present,
-  ", session.data.id_token=", session.data.id_token ~= nil,
-  ", session.data.authenticated=", session.data.authenticated)
   
+  log(DEBUG,
+    "session.present=", session.present,
+    ", session.data.id_token=", session.data.id_token ~= nil,
+    ", session.data.authenticated=", session.data.authenticated)
+    
   target_url = target_url or ngx.var.request_uri
 
   local access_token
