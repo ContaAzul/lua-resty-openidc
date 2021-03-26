@@ -1417,7 +1417,10 @@ function openidc.authenticate(opts, target_url, unauth_action, session_opts)
     return nil, session_error, target_url, session
   end
   log(DEBUG, "Session started!")
-  log(DEBUG, "Session errors ??? : " .. session_error)
+  if session_error ~= nil then
+    log(DEBUG, "Session errors ??? : " .. session_error)
+  end
+  
   "session.present=", session.present,
   ", session.data.id_token=", session.data.id_token ~= nil,
   ", session.data.authenticated=", session.data.authenticated)
