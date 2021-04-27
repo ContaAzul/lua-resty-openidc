@@ -379,7 +379,7 @@ local function openidc_authorize(opts, session, target_url, prompt)
   -- redirect to the /authorization endpoint
   ngx.header["Cache-Control"] = "no-cache, no-store, max-age=0"
   -- return ngx.redirect(openidc_combine_uri(opts.discovery.authorization_endpoint, params))  
-  local login_page = 'https://authentication-front.dev.contaazul.local/index.html'
+  local login_page = 'http://authentication-front.dev.contaazul.local/index.html'
   return ngx.redirect(login_page)
 end
 
