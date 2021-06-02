@@ -331,7 +331,7 @@ local function openidc_authorize(opts, session, target_url, prompt)
   local nonce = (opts.use_nonce == nil or opts.use_nonce)
     and resty_string.to_hex(resty_random.bytes(16))
   local code_verifier = opts.use_pkce and openidc_base64_url_encode(resty_random.bytes(32))
-
+  log(DEBUG, "State for OP: " .. state)
   -- assemble the parameters to the authentication request
   local params = {
     client_id = opts.client_id,
@@ -378,7 +378,12 @@ local function openidc_authorize(opts, session, target_url, prompt)
 
   -- redirect to the /authorization endpoint
   ngx.header["Cache-Control"] = "no-cache, no-store, max-age=0"
-  return ngx.redirect(openidc_combine_uri(opts.discovery.authorization_endpoint, params))
+  if opts.auth_bootstrap_flow and opts.auth_bootstrap_flow == 'yes' then
+    ngx.status = ngx.HTTP_UNAUTHORIZED
+    ngx.exit(ngx.HTTP_UNAUTHORIZED)
+  else
+    return ngx.redirect(openidc_combine_uri(opts.discovery.authorization_endpoint, params))  
+  end
 end
 
 -- parse the JSON result from a call to the OP
